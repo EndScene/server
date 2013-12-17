@@ -67,6 +67,9 @@ enum AccountDataType
 #define GLOBAL_CACHE_MASK           0x15
 #define PER_CHARACTER_CACHE_MASK    0xEA
 
+#define DB2_REPLY_ITEM 1344507586
+#define DB2_REPLY_SPARSE 2442913102
+
 struct AccountData
 {
     AccountData() : Time(0), Data("") {}
@@ -227,7 +230,6 @@ class WorldSessionFilter : public PacketFilter
 class MANGOS_DLL_SPEC WorldSession
 {
         friend class CharacterHandler;
-
     public:
         WorldSession(uint32 id, WorldSocket* sock, AccountTypes sec, uint8 expansion, time_t mute_time, LocaleConstant locale);
         ~WorldSession();
@@ -293,9 +295,11 @@ class MANGOS_DLL_SPEC WorldSession
         /// Handle the authentication waiting queue (to be completed)
         void SendAuthWaitQue(uint32 position);
 
-        void SendNameQueryOpcode(Player* p);
-        void SendNameQueryOpcodeFromDB(ObjectGuid guid);
-        static void SendNameQueryOpcodeFromDBCallBack(QueryResult* result, uint32 accountId);
+        void SendNameQueryOpcode(Player* p, uint32 realmId);
+        void SendNameQueryOpcodeFromDB(ObjectGuid guid, uint32 realmId);
+        void HandleRealmQueryOpcode(WorldPacket& recv_data);
+        static void SendNameQueryOpcodeFromDBCallBack(QueryResult* result, uint32 accountId, uint32 realmId);
+        void SendAuthResponse(uint8 code, bool queued, uint32 queuePos = 0);
 
         void SendTrainerList(ObjectGuid guid);
         void SendTrainerList(ObjectGuid guid, const std::string& strTitle);
@@ -592,7 +596,6 @@ class MANGOS_DLL_SPEC WorldSession
         void HandleBuyBankSlotOpcode(WorldPacket& recvPacket);
         void HandleTrainerListOpcode(WorldPacket& recvPacket);
         void HandleTrainerBuySpellOpcode(WorldPacket& recvPacket);
-
         void HandlePetitionShowListOpcode(WorldPacket& recvPacket);
         void HandleGossipHelloOpcode(WorldPacket& recvPacket);
         void HandleGossipSelectOptionOpcode(WorldPacket& recvPacket);
@@ -711,6 +714,7 @@ class MANGOS_DLL_SPEC WorldSession
         void HandleCorpseQueryOpcode(WorldPacket& recvPacket);
         void HandleCorpseMapPositionQueryOpcode(WorldPacket& recvPacket);
         void HandleResurrectResponseOpcode(WorldPacket& recvPacket);
+		void HandleReturnToGraveyard(WorldPacket& recvPacket);
         void HandleSummonResponseOpcode(WorldPacket& recv_data);
 
         void HandleJoinChannelOpcode(WorldPacket& recvPacket);
@@ -863,6 +867,12 @@ class MANGOS_DLL_SPEC WorldSession
         void HandleCalendarComplain(WorldPacket& recv_data);
         void HandleCalendarGetNumPending(WorldPacket& recv_data);
 
+        // Hotfix handlers
+        void HandleRequestHotfix(WorldPacket& recv_data);
+        void SendItemDb2Reply(uint32 entry);
+        void SendItemSparseDb2Reply(uint32 entry); 
+
+        void HandleObjectUpdateFailedOpcode(WorldPacket& recv_data);
         void HandleSpellClick(WorldPacket& recv_data);
         void HandleGetMirrorimageData(WorldPacket& recv_data);
         void HandleAlterAppearanceOpcode(WorldPacket& recv_data);
@@ -877,6 +887,11 @@ class MANGOS_DLL_SPEC WorldSession
         void HandleQueryQuestsCompletedOpcode(WorldPacket& recv_data);
         void HandleQuestPOIQueryOpcode(WorldPacket& recv_data);
         void HandleSetCurrencyFlagsOpcode(WorldPacket& recv_data);
+
+        // Reforge
+        void HandleReforgeItemOpcode(WorldPacket& recvData);
+        void SendReforgeResult(bool success);
+
     private:
         // private trade methods
         void moveItems(Item* myItems[], Item* hisItems[]);

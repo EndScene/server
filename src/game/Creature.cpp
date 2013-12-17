@@ -97,34 +97,6 @@ VendorItem const* VendorItemData::FindItemCostPair(uint32 item_id, uint8 type, u
     return NULL;
 }
 
-bool AssistDelayEvent::Execute(uint64 /*e_time*/, uint32 /*p_time*/)
-{
-    if (Unit* victim = m_owner.GetMap()->GetUnit(m_victimGuid))
-    {
-        while (!m_assistantGuids.empty())
-        {
-            Creature* assistant = m_owner.GetMap()->GetAnyTypeCreature(*m_assistantGuids.rbegin());
-            m_assistantGuids.pop_back();
-
-            if (assistant && assistant->CanAssistTo(&m_owner, victim))
-            {
-                assistant->SetNoCallAssistance(true);
-                if (assistant->AI())
-                    assistant->AI()->AttackStart(victim);
-            }
-        }
-    }
-    return true;
-}
-
-AssistDelayEvent::AssistDelayEvent(ObjectGuid victim, Unit& owner, std::list<Creature*> const& assistants) : BasicEvent(), m_victimGuid(victim), m_owner(owner)
-{
-    // Pushing guids because in delay can happen some creature gets despawned => invalid pointer
-    m_assistantGuids.reserve(assistants.size());
-    for (std::list<Creature*>::const_iterator itr = assistants.begin(); itr != assistants.end(); ++itr)
-        m_assistantGuids.push_back((*itr)->GetObjectGuid());
-}
-
 bool ForcedDespawnDelayEvent::Execute(uint64 /*e_time*/, uint32 /*p_time*/)
 {
     m_owner.ForcedDespawn();
@@ -217,8 +189,17 @@ void Creature::RemoveFromWorld()
 
 void Creature::RemoveCorpse()
 {
+    // since pool system can fail to roll unspawned object, this one can remain spawned, so must set respawn nevertheless
+    if (uint16 poolid = sPoolMgr.IsPartOfAPool<Creature>(GetGUIDLow()))
+        sPoolMgr.UpdatePool<Creature>(*GetMap()->GetPersistentState(), poolid, GetGUIDLow());
+
+    if (!IsInWorld())                                       // can be despawned by update pool
+        return;
+
     if ((getDeathState() != CORPSE && !m_isDeadByDefault) || (getDeathState() != ALIVE && m_isDeadByDefault))
         return;
+
+    DEBUG_FILTER_LOG(LOG_FILTER_AI_AND_MOVEGENSS, "Removing corpse of %s ", GetGuidStr().c_str());
 
     m_corpseDecayTimer = 0;
     SetDeathState(DEAD);
@@ -544,26 +525,17 @@ void Creature::Update(uint32 update_diff, uint32 diff)
 
             if (m_corpseDecayTimer <= update_diff)
             {
-                // since pool system can fail to roll unspawned object, this one can remain spawned, so must set respawn nevertheless
-                if (uint16 poolid = sPoolMgr.IsPartOfAPool<Creature>(GetGUIDLow()))
-                    sPoolMgr.UpdatePool<Creature>(*GetMap()->GetPersistentState(), poolid, GetGUIDLow());
-
-                if (IsInWorld())                            // can be despawned by update pool
-                {
-                    RemoveCorpse();
-                    DEBUG_FILTER_LOG(LOG_FILTER_AI_AND_MOVEGENSS, "Removing corpse... %u ", GetEntry());
-                }
+                RemoveCorpse();
+                break;
             }
             else
-            {
                 m_corpseDecayTimer -= update_diff;
-                if (m_groupLootId)
-                {
-                    if (m_groupLootTimer <= update_diff)
-                        StopGroupLoot();
-                    else
-                        m_groupLootTimer -= update_diff;
-                }
+            if (m_groupLootId)                              // Loot is stopped already if corpse got removed.
+            {
+                if (m_groupLootTimer <= update_diff)
+                    StopGroupLoot();
+                else
+                    m_groupLootTimer -= update_diff;
             }
 
             break;
@@ -574,22 +546,11 @@ void Creature::Update(uint32 update_diff, uint32 diff)
             {
                 if (m_corpseDecayTimer <= update_diff)
                 {
-                    // since pool system can fail to roll unspawned object, this one can remain spawned, so must set respawn nevertheless
-                    if (uint16 poolid = sPoolMgr.IsPartOfAPool<Creature>(GetGUIDLow()))
-                        sPoolMgr.UpdatePool<Creature>(*GetMap()->GetPersistentState(), poolid, GetGUIDLow());
-
-                    if (IsInWorld())                        // can be despawned by update pool
-                    {
-                        RemoveCorpse();
-                        DEBUG_FILTER_LOG(LOG_FILTER_AI_AND_MOVEGENSS, "Removing alive corpse... %u ", GetEntry());
-                    }
-                    else
-                        return;
+                    RemoveCorpse();
+                    break;
                 }
                 else
-                {
                     m_corpseDecayTimer -= update_diff;
-                }
             }
 
             Unit::Update(update_diff, diff);
@@ -840,13 +801,14 @@ bool Creature::IsTrainerOf(Player* pPlayer, bool msg) const
                     pPlayer->PlayerTalkClass->ClearMenus();
                     switch (GetCreatureInfo()->trainer_class)
                     {
-                        case CLASS_DRUID:  pPlayer->PlayerTalkClass->SendGossipMenu(4913, GetObjectGuid()); break;
-                        case CLASS_HUNTER: pPlayer->PlayerTalkClass->SendGossipMenu(10090, GetObjectGuid()); break;
-                        case CLASS_MAGE:   pPlayer->PlayerTalkClass->SendGossipMenu(328, GetObjectGuid()); break;
+                        case CLASS_DRUID:   pPlayer->PlayerTalkClass->SendGossipMenu(4913, GetObjectGuid()); break;
+                        case CLASS_HUNTER:  pPlayer->PlayerTalkClass->SendGossipMenu(10090, GetObjectGuid()); break;
+                        case CLASS_MAGE:    pPlayer->PlayerTalkClass->SendGossipMenu(328, GetObjectGuid()); break;
                         case CLASS_PALADIN: pPlayer->PlayerTalkClass->SendGossipMenu(1635, GetObjectGuid()); break;
-                        case CLASS_PRIEST: pPlayer->PlayerTalkClass->SendGossipMenu(4436, GetObjectGuid()); break;
-                        case CLASS_ROGUE:  pPlayer->PlayerTalkClass->SendGossipMenu(4797, GetObjectGuid()); break;
-                        case CLASS_SHAMAN: pPlayer->PlayerTalkClass->SendGossipMenu(5003, GetObjectGuid()); break;
+                        case CLASS_PRIEST:  pPlayer->PlayerTalkClass->SendGossipMenu(4436, GetObjectGuid()); break;
+                        case CLASS_ROGUE:   pPlayer->PlayerTalkClass->SendGossipMenu(4797, GetObjectGuid()); break;
+                        case CLASS_MONK:    pPlayer->PlayerTalkClass->SendGossipMenu(4797, GetObjectGuid()); break;
+                        case CLASS_SHAMAN:  pPlayer->PlayerTalkClass->SendGossipMenu(5003, GetObjectGuid()); break;
                         case CLASS_WARLOCK: pPlayer->PlayerTalkClass->SendGossipMenu(5836, GetObjectGuid()); break;
                         case CLASS_WARRIOR: pPlayer->PlayerTalkClass->SendGossipMenu(4985, GetObjectGuid()); break;
                     }
@@ -1578,6 +1540,9 @@ void Creature::SetDeathState(DeathState s)
 void Creature::Respawn()
 {
     RemoveCorpse();
+    if (!IsInWorld())                                       // Could be removed as part of a pool (in which case respawn-time is handled with pool-system)
+        return;
+
 
     if (IsDespawned())
     {
@@ -1596,11 +1561,14 @@ void Creature::ForcedDespawn(uint32 timeMSToDespawn)
         m_Events.AddEvent(pEvent, m_Events.CalculateTime(timeMSToDespawn));
         return;
     }
+    if (IsDespawned())
+        return;
 
     if (isAlive())
         SetDeathState(JUST_DIED);
 
-    m_corpseDecayTimer = 1;                                 // Properly remove corpse on next tick (also pool system requires Creature::Update call with CORPSE state
+    RemoveCorpse();
+    
     SetHealth(0);                                           // just for nice GM-mode view
 }
 
@@ -1678,11 +1646,12 @@ SpellEntry const* Creature::ReachWithSpellAttack(Unit* pVictim)
 
         if(spellInfo->GetManaCost() > GetPower(POWER_MANA))
             continue;
-        SpellRangeEntry const* srange = sSpellRangeStore.LookupEntry(spellInfo->rangeIndex);
+        uint32 rangeIndex = spellInfo->GetRangeIndex();
+        SpellRangeEntry const* srange = sSpellRangeStore.LookupEntry(rangeIndex);
         float range = GetSpellMaxRange(srange);
         float minrange = GetSpellMinRange(srange);
 
-        float dist = GetCombatDistance(pVictim, spellInfo->rangeIndex == SPELL_RANGE_IDX_COMBAT);
+        float dist = GetCombatDistance(pVictim, rangeIndex == SPELL_RANGE_IDX_COMBAT);
 
         // if(!isInFront( pVictim, range ) && spellInfo->AttributesEx )
         //    continue;
@@ -1728,11 +1697,12 @@ SpellEntry const* Creature::ReachWithSpellCure(Unit* pVictim)
 
         if(spellInfo->GetManaCost() > GetPower(POWER_MANA))
             continue;
-        SpellRangeEntry const* srange = sSpellRangeStore.LookupEntry(spellInfo->rangeIndex);
+        uint32 rangeIndex = spellInfo->GetRangeIndex();
+        SpellRangeEntry const* srange = sSpellRangeStore.LookupEntry(rangeIndex);
         float range = GetSpellMaxRange(srange);
         float minrange = GetSpellMinRange(srange);
 
-        float dist = GetCombatDistance(pVictim, spellInfo->rangeIndex == SPELL_RANGE_IDX_COMBAT);
+        float dist = GetCombatDistance(pVictim, rangeIndex == SPELL_RANGE_IDX_COMBAT);
 
         // if(!isInFront( pVictim, range ) && spellInfo->AttributesEx )
         //    continue;
@@ -1800,24 +1770,7 @@ void Creature::CallAssistance()
     if (!m_AlreadyCallAssistance && getVictim() && !isCharmed())
     {
         SetNoCallAssistance(true);
-
-        float radius = sWorld.getConfig(CONFIG_FLOAT_CREATURE_FAMILY_ASSISTANCE_RADIUS);
-        if (radius > 0)
-        {
-            std::list<Creature*> assistList;
-
-            {
-                MaNGOS::AnyAssistCreatureInRangeCheck u_check(this, getVictim(), radius);
-                MaNGOS::CreatureListSearcher<MaNGOS::AnyAssistCreatureInRangeCheck> searcher(assistList, u_check);
-                Cell::VisitGridObjects(this, searcher, radius);
-            }
-
-            if (!assistList.empty())
-            {
-                AssistDelayEvent* e = new AssistDelayEvent(getVictim()->GetObjectGuid(), *this, assistList);
-                m_Events.AddEvent(e, m_Events.CalculateTime(sWorld.getConfig(CONFIG_UINT32_CREATURE_FAMILY_ASSISTANCE_DELAY)));
-            }
-        }
+        AI()->SendAIEventAround(AI_EVENT_CALL_ASSISTANCE, getVictim(), sWorld.getConfig(CONFIG_UINT32_CREATURE_FAMILY_ASSISTANCE_DELAY), sWorld.getConfig(CONFIG_FLOAT_CREATURE_FAMILY_ASSISTANCE_RADIUS));
     }
 }
 
@@ -1846,7 +1799,7 @@ bool Creature::CanAssistTo(const Unit* u, const Unit* enemy, bool checkfaction /
         return false;
 
     // skip fighting creature
-    if (isInCombat())
+    if (enemy && isInCombat())
         return false;
 
     // only free creature
@@ -1866,7 +1819,7 @@ bool Creature::CanAssistTo(const Unit* u, const Unit* enemy, bool checkfaction /
     }
 
     // skip non hostile to caster enemy creatures
-    if (!IsHostileTo(enemy))
+    if (enemy && !IsHostileTo(enemy))
         return false;
 
     return true;
@@ -2000,9 +1953,9 @@ bool Creature::LoadCreatureAddon(bool reload)
             SpellEntry const* spellInfo = sSpellStore.LookupEntry(*cAura);  // Already checked on load
 
             // Get Difficulty mode for initial case (npc not yet added to world)
-            if (spellInfo->SpellDifficultyId && !reload && GetMap()->IsDungeon())
-                if (SpellEntry const* spellEntry = GetSpellEntryByDifficulty(spellInfo->SpellDifficultyId, GetMap()->GetDifficulty(), GetMap()->IsRaid()))
-                    spellInfo = spellEntry;
+            //if (spellInfo->SpellDifficultyId && !reload && GetMap()->IsDungeon())
+            //    if (SpellEntry const* spellEntry = GetSpellEntryByDifficulty(spellInfo->SpellDifficultyId, GetMap()->GetDifficulty(), GetMap()->IsRaid()))
+            //        spellInfo = spellEntry;
 
             CastSpell(this, spellInfo, true);
         }
@@ -2077,14 +2030,14 @@ bool Creature::MeetsSelectAttackingRequirement(Unit* pTarget, SpellEntry const* 
 
     if (pSpellInfo)
     {
-        switch (pSpellInfo->rangeIndex)
+        switch (pSpellInfo->GetRangeIndex())
         {
             case SPELL_RANGE_IDX_SELF_ONLY: return false;
             case SPELL_RANGE_IDX_ANYWHERE:  return true;
             case SPELL_RANGE_IDX_COMBAT:    return CanReachWithMeleeAttack(pTarget);
         }
 
-        SpellRangeEntry const* srange = sSpellRangeStore.LookupEntry(pSpellInfo->rangeIndex);
+        SpellRangeEntry const* srange = sSpellRangeStore.LookupEntry(pSpellInfo->GetRangeIndex());
         float max_range = GetSpellMaxRange(srange);
         float min_range = GetSpellMinRange(srange);
         float dist = GetCombatDistance(pTarget, false);

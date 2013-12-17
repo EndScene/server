@@ -22,7 +22,7 @@
 // Client expected level limitation, like as used in DBC item max levels for "until max player level"
 // use as default max player level, must be fit max level for used client
 // also see MAX_LEVEL and STRONG_MAX_LEVEL define
-#define DEFAULT_MAX_LEVEL 85
+#define DEFAULT_MAX_LEVEL 90
 
 // client supported max level for player/pets/etc. Avoid overflow or client stability affected.
 // also see GT_MAX_LEVEL define
@@ -59,7 +59,7 @@ enum AchievementFlags
 {
     ACHIEVEMENT_FLAG_NONE                   = 0x00000000,
     ACHIEVEMENT_FLAG_COUNTER                = 0x00000001,   // ACHIEVEMENT_FLAG_STATISTIC Just count statistic (never stop and complete)
-    ACHIEVEMENT_FLAG_UNK2                   = 0x00000002,   // ACHIEVEMENT_FLAG_HIDDEN not used
+    ACHIEVEMENT_FLAG_HIDDEN                 = 0x00000002,   // ACHIEVEMENT_FLAG_HIDDEN Not show in client
     ACHIEVEMENT_FLAG_STORE_MAX_VALUE        = 0x00000004,   // ACHIEVEMENT_FLAG_HIDDEN_TILL_AWARDED Store only max value? used only in "Reach level xx"
     ACHIEVEMENT_FLAG_SUMM                   = 0x00000008,   // ACHIEVEMENT_FLAG_CUMULATIVE Use summ criteria value from all requirements (and calculate max value)
     ACHIEVEMENT_FLAG_MAX_USED               = 0x00000010,   // ACHIEVEMENT_FLAG_DISPLAY_HIGHEST Show max criteria (and calculate max value ??)
@@ -70,8 +70,8 @@ enum AchievementFlags
     ACHIEVEMENT_FLAG_REALM_FIRST_KILL       = 0x00000200,   //
     ACHIEVEMENT_FLAG_UNK3                   = 0x00000400,   // ACHIEVEMENT_FLAG_HIDE_NAME_IN_TIE
     ACHIEVEMENT_FLAG_REALM_FIRST_GUILD      = 0x00000800,   // first guild on realm done something
-    ACHIEVEMENT_FLAG_UNK4                   = 0x00001000,   // as guild group?
-    ACHIEVEMENT_FLAG_UNK5                   = 0x00002000,   // as guild group?
+    ACHIEVEMENT_FLAG_SHOW_IN_GUILD_NEWS    = 0x00001000,    // Shows in guild news
+    ACHIEVEMENT_FLAG_SHOW_IN_GUILD_HEADER  = 0x00002000,    // Shows in guild news header
     ACHIEVEMENT_FLAG_GUILD                  = 0x00004000,   //
     ACHIEVEMENT_FLAG_SHOW_GUILD_MEMBERS     = 0x00008000,   //
     ACHIEVEMENT_FLAG_SHOW_CRITERIA_MEMBERS  = 0x00010000,   //
@@ -103,12 +103,12 @@ enum AchievementCriteriaTypes
 {
     ACHIEVEMENT_CRITERIA_TYPE_KILL_CREATURE = 0,
     ACHIEVEMENT_CRITERIA_TYPE_WIN_BG = 1,
+    ACHIEVEMENT_CRITERIA_TYPE_COMPLETE_ARCHAEOLOGY_PROJECTS = 3, // struct { uint32 itemCount; }
     ACHIEVEMENT_CRITERIA_TYPE_REACH_LEVEL = 5,
     ACHIEVEMENT_CRITERIA_TYPE_REACH_SKILL_LEVEL = 7,
     ACHIEVEMENT_CRITERIA_TYPE_COMPLETE_ACHIEVEMENT = 8,
     ACHIEVEMENT_CRITERIA_TYPE_COMPLETE_QUEST_COUNT = 9,
-    // you have to complete a daily quest x times in a row
-    ACHIEVEMENT_CRITERIA_TYPE_COMPLETE_DAILY_QUEST_DAILY = 10,
+    ACHIEVEMENT_CRITERIA_TYPE_COMPLETE_DAILY_QUEST_DAILY    = 10, // you have to complete a daily quest x times in a row
     ACHIEVEMENT_CRITERIA_TYPE_COMPLETE_QUESTS_IN_ZONE = 11,
     ACHIEVEMENT_CRITERIA_TYPE_CURRENCY_EARNED = 12,
     ACHIEVEMENT_CRITERIA_TYPE_DAMAGE_DONE = 13,
@@ -275,7 +275,7 @@ enum AchievementCriteriaMoreReqType
 
 enum AreaFlags
 {
-    AREA_FLAG_SNOW                  = 0x00000001,           // snow (only Dun Morogh, Naxxramas, Razorfen Downs and Winterspring)
+    AREA_FLAG_SNOW                  = 0x00000001,           // wrong - snow (only Dun Morogh, Naxxramas, Razorfen Downs and Winterspring)
     AREA_FLAG_UNK1                  = 0x00000002,           // may be necropolis?
     AREA_FLAG_UNK2                  = 0x00000004,           // Only used for areas on map 571 (development before)
     AREA_FLAG_SLAVE_CAPITAL         = 0x00000008,           // city and city subsones
@@ -285,25 +285,27 @@ enum AreaFlags
     AREA_FLAG_ARENA                 = 0x00000080,           // arena, both instanced and world arenas
     AREA_FLAG_CAPITAL               = 0x00000100,           // main capital city flag
     AREA_FLAG_CITY                  = 0x00000200,           // only for one zone named "City" (where it located?)
-    AREA_FLAG_OUTLAND               = 0x00000400,           // expansion zones? (only Eye of the Storm not have this flag, but have 0x00004000 flag)
+    AREA_FLAG_OUTLAND               = 0x00000400,           // Dragonshrines, The Verne, Pincer X2, Entryway of Time
     AREA_FLAG_SANCTUARY             = 0x00000800,           // sanctuary area (PvP disabled)
-    AREA_FLAG_NEED_FLY              = 0x00001000,           // only Netherwing Ledge, Socrethar's Seat, Tempest Keep, The Arcatraz, The Botanica, The Mechanar, Sorrow Wing Point, Dragonspine Ridge, Netherwing Mines, Dragonmaw Base Camp, Dragonmaw Skyway
+    AREA_FLAG_NEED_FLY              = 0x00001000,           // only Netherwing Ledge, Socrethar's Seat, Tempest Keep, The Arcatraz, The Botanica, The Mechanar, Sorrow Wing Point, Dragonspine Ridge, Netherwing Mines, Dragonmaw Base Camp, Dragonmaw Skyway, Naxxramas, Maelstrom zones
     AREA_FLAG_UNUSED1               = 0x00002000,           // not used now (no area/zones with this flag set in 3.0.3)
     AREA_FLAG_OUTLAND2              = 0x00004000,           // expansion zones? (only Circle of Blood Arena not have this flag, but have 0x00000400 flag)
     AREA_FLAG_PVP                   = 0x00008000,           // pvp objective area? (Death's Door also has this flag although it's no pvp object area)
-    AREA_FLAG_ARENA_INSTANCE        = 0x00010000,           // used by instanced arenas only
+    AREA_FLAG_ARENA_INSTANCE        = 0x00010000,           // used by instanced arenas, Twin Peaks indoor areas, THe Lost Isles
     AREA_FLAG_UNUSED2               = 0x00020000,           // not used now (no area/zones with this flag set in 3.0.3)
     AREA_FLAG_UNK5                  = 0x00040000,           // only used for Amani Pass, Hatchet Hills
-    AREA_FLAG_UNK6                  = 0x00080000,           // Valgarde and Acherus: The Ebon Hold
+    AREA_FLAG_UNK6                  = 0x00080000,           // Valgarde, Acherus: The Ebon Hold, Gilneas, Kezhan, The Maelstrom, Duskmist Shore, The Lost Isles
     AREA_FLAG_LOWLEVEL              = 0x00100000,           // used for some starting areas with area_level <=15
     AREA_FLAG_TOWN                  = 0x00200000,           // small towns with Inn
     AREA_FLAG_UNK7                  = 0x00400000,           // Warsong Hold, Acherus: The Ebon Hold, New Agamand Inn, Vengeance Landing Inn
     AREA_FLAG_UNK8                  = 0x00800000,           // Westguard Inn, Acherus: The Ebon Hold, Valgarde
-    AREA_FLAG_OUTDOOR_PVP           = 0x01000000,           // Wintergrasp and it's subzones
+    AREA_FLAG_OUTDOOR_PVP           = 0x01000000,           // Wintergrasp, Twin peaks and it's subzones, Ironclad Garrison (Tol Barad)
     AREA_FLAG_INSIDE                = 0x02000000,           // used for determinating spell related inside/outside questions in Map::IsOutdoors
     AREA_FLAG_OUTSIDE               = 0x04000000,           // used for determinating spell related inside/outside questions in Map::IsOutdoors
-    AREA_FLAG_CAN_HEARTH_AND_RES    = 0x08000000,           // Wintergrasp and it's subzones
-    AREA_FLAG_CANNOT_FLY            = 0x20000000            // not allowed to fly, only used in Dalaran areas (zone 4395)
+    AREA_FLAG_CAN_HEARTH_AND_RES    = 0x08000000,           // Wintergrasp, Tol Barad and their subzones
+    AREA_FLAG_TP                    = 0x20000000,           // Twin Peaks areas
+    AREA_FLAG_UNK9                  = 0x40000000,           // many world zones
+    AREA_FLAG_BFG                   = 0x80000000,           // Battle for Gilneas areas and one Twin Peaks area
 };
 
 enum Difficulty
@@ -312,7 +314,7 @@ enum Difficulty
 
     DUNGEON_DIFFICULTY_NORMAL    = 0,
     DUNGEON_DIFFICULTY_HEROIC    = 1,
-    // DUNGEON_DIFFICULTY_EPIC    = 2,                      // not used, but exists
+    DUNGEON_DIFFICULTY_CHALLENGE = 2,                      // 5.x Challenge mode dungeons
 
     RAID_DIFFICULTY_10MAN_NORMAL = 0,
     RAID_DIFFICULTY_25MAN_NORMAL = 1,
@@ -320,7 +322,7 @@ enum Difficulty
     RAID_DIFFICULTY_25MAN_HEROIC = 3,
 };
 
-#define MAX_DUNGEON_DIFFICULTY     2
+#define MAX_DUNGEON_DIFFICULTY     3
 #define MAX_RAID_DIFFICULTY        4
 #define MAX_DIFFICULTY             4
 
@@ -330,7 +332,8 @@ enum SpawnMask
 
     SPAWNMASK_DUNGEON_NORMAL    = (1 << DUNGEON_DIFFICULTY_NORMAL),
     SPAWNMASK_DUNGEON_HEROIC    = (1 << DUNGEON_DIFFICULTY_HEROIC),
-    SPAWNMASK_DUNGEON_ALL       = (SPAWNMASK_DUNGEON_NORMAL | SPAWNMASK_DUNGEON_HEROIC),
+    SPAWNMASK_DUNGEON_CHALLENGE = (1 << DUNGEON_DIFFICULTY_CHALLENGE),
+    SPAWNMASK_DUNGEON_ALL       = (SPAWNMASK_DUNGEON_NORMAL | SPAWNMASK_DUNGEON_HEROIC | SPAWNMASK_DUNGEON_CHALLENGE),
 
     SPAWNMASK_RAID_10MAN_NORMAL = (1 << RAID_DIFFICULTY_10MAN_NORMAL),
     SPAWNMASK_RAID_25MAN_NORMAL = (1 << RAID_DIFFICULTY_25MAN_NORMAL),
@@ -364,7 +367,22 @@ enum MapTypes                                               // Lua_IsInInstance
     MAP_INSTANCE        = 1,                                // party
     MAP_RAID            = 2,                                // raid
     MAP_BATTLEGROUND    = 3,                                // pvp
-    MAP_ARENA           = 4                                 // arena
+    MAP_ARENA           = 4,                                // arena
+    MAP_SCENARIO        = 5                                 // scenario
+};
+
+enum MapFlags                                               // Map flags (need more research)
+{
+    MAP_FLAG_NONE                = 0x00000000,              // none specific
+    MAP_FLAG_INSTANCEABLE        = 0x00000001,              // or possible splittable for continent maps
+    MAP_FLAG_DEVELOPMENT         = 0x00000002,              // testing or development maps only
+    MAP_FLAG_UNK3                = 0x00000004,              //
+    MAP_FLAG_UNK4                = 0x00000008,              //
+    MAP_FLAG_UNK5                = 0x00000010,              //
+    MAP_FLAG_UNK6                = 0x00000020,              //
+    MAP_FLAG_UNK7                = 0x00000040,              //
+    MAP_FLAG_UNK8                = 0x00000080,              //
+    MAP_FLAG_VARIABLE_DIFFICULTY = 0x00000100,              // maps, where has changeable difficulty
 };
 
 enum AbilytyLearnType
@@ -428,6 +446,11 @@ enum ItemLimitCategory
     ITEM_LIMIT_CATEGORY_MANA_GEM   = 4,
 };
 
+enum MountFlags
+{
+    MOUNT_FLAG_CAN_PITCH            = 0x4,                  // client checks MOVEMENTFLAG2_FULL_SPEED_PITCHING
+    MOUNT_FLAG_CAN_SWIM             = 0x8,                  // client checks MOVEMENTFLAG_SWIMMING
+};
 enum TalentTreeRole
 {
     TALENT_ROLE_TANK    = 0x2,
@@ -456,7 +479,8 @@ enum SummonPropGroup
     SUMMON_PROP_GROUP_FRIENDLY          = 1,
     SUMMON_PROP_GROUP_PETS              = 2,
     SUMMON_PROP_GROUP_CONTROLLABLE      = 3,
-    SUMMON_PROP_GROUP_VEHICLE           = 4
+    SUMMON_PROP_GROUP_VEHICLE           = 4,
+    SUMMON_PROP_GROUP_UNCONTROLLABLE_VEHICLE        = 5
 };
 
 // SummonProperties.dbc, col 2          == FactionId        (m_faction)
@@ -492,7 +516,7 @@ enum SummonPropFlags
     SUMMON_PROP_FLAG_UNK7               = 0x0040,           // 12 spells in 3.0.3, no idea
     SUMMON_PROP_FLAG_UNK8               = 0x0080,           // 4 spells in 3.0.3, no idea
     SUMMON_PROP_FLAG_UNK9               = 0x0100,           // 51 spells in 3.0.3, no idea, many quest related
-    SUMMON_PROP_FLAG_UNK10             = 0x0200,            // 51 spells in 3.0.3, something defensive
+    SUMMON_PROP_FLAG_INHERIT_FACTION    = 0x0200,            // 51 spells in 3.0.3, something defensive
     SUMMON_PROP_FLAG_UNK11              = 0x0400,           // 3 spells, requires something near?
     SUMMON_PROP_FLAG_UNK12              = 0x0800,           // 30 spells in 3.0.3, no idea
     SUMMON_PROP_FLAG_UNK13              = 0x1000,           // 8 spells in 3.0.3, siege vehicle
@@ -529,10 +553,36 @@ enum SpellEffectIndex
 {
     EFFECT_INDEX_0     = 0,
     EFFECT_INDEX_1     = 1,
-    EFFECT_INDEX_2     = 2
+    EFFECT_INDEX_2     = 2,
+    EFFECT_INDEX_3     = 3,
+    EFFECT_INDEX_4     = 4,
+    EFFECT_INDEX_5     = 5,
+    EFFECT_INDEX_6     = 6,
+    EFFECT_INDEX_7     = 7,
+    EFFECT_INDEX_8     = 8,
+    EFFECT_INDEX_9     = 9,
+    EFFECT_INDEX_10    = 10,
+    EFFECT_INDEX_11    = 11,
+    EFFECT_INDEX_12    = 12,
+    EFFECT_INDEX_13    = 13,
+    EFFECT_INDEX_14    = 14,
+    EFFECT_INDEX_15    = 15,
+    EFFECT_INDEX_16    = 16,
+    EFFECT_INDEX_17    = 17,
+    EFFECT_INDEX_18    = 18,
+    EFFECT_INDEX_19    = 19,
+    EFFECT_INDEX_20    = 20,
 };
 
-#define MAX_EFFECT_INDEX 3
+#define EFFECT_MASK_ALL \
+    ((1 << EFFECT_INDEX_0) | (1 << EFFECT_INDEX_1) | (1 << EFFECT_INDEX_2) | \
+    (1 << EFFECT_INDEX_3) | (1 << EFFECT_INDEX_4) | (1 << EFFECT_INDEX_5) | \
+    (1 << EFFECT_INDEX_6) | (1 << EFFECT_INDEX_7) | (1 << EFFECT_INDEX_8) | \
+    (1 << EFFECT_INDEX_9) | (1 << EFFECT_INDEX_10) | (1 << EFFECT_INDEX_11) | \
+    (1 << EFFECT_INDEX_12) | (1 << EFFECT_INDEX_13) | (1 << EFFECT_INDEX_14) | \
+    (1 << EFFECT_INDEX_15) | (1 << EFFECT_INDEX_16) | (1 << EFFECT_INDEX_17) | \
+    (1 << EFFECT_INDEX_18) | (1 << EFFECT_INDEX_19) | (1 << EFFECT_INDEX_20))
+#define MAX_EFFECT_INDEX 21
 
 enum SpellFamily
 {
@@ -550,10 +600,11 @@ enum SpellFamily
     SPELLFAMILY_SHAMAN      = 11,
     SPELLFAMILY_UNK2        = 12,                           // 2 spells (silence resistance)
     SPELLFAMILY_POTION      = 13,
-    // 14 - unused
+    SPELLFAMILY_MONK        = 14,
     SPELLFAMILY_DEATHKNIGHT = 15,
     // 16 - unused
-    SPELLFAMILY_PET         = 17
+    SPELLFAMILY_PET         = 17,
+    SPELLFAMILY_MINIGAME    = 50,
 };
 
 enum VehicleFlags
@@ -594,6 +645,7 @@ enum VehicleFlags
 
 enum VehicleSeatFlags
 {
+    SEAT_FLAG_NONE                  = 0x00000000,           //
     SEAT_FLAG_UNK1                  = 0x00000001,           // "HasLowerAnimForEnter"
     SEAT_FLAG_UNK2                  = 0x00000002,           // "HasLowerAnimForRide"
     SEAT_FLAG_UNK3                  = 0x00000004,
@@ -604,12 +656,12 @@ enum VehicleSeatFlags
     SEAT_FLAG_UNK8                  = 0x00000080,
     SEAT_FLAG_UNK9                  = 0x00000100,
     SEAT_FLAG_HIDE_PASSENGER        = 0x00000200,           // Passenger is hidden
-    SEAT_FLAG_UNK10                 = 0x00000400,           // "AllowsTurning"
+    SEAT_FLAG_FREE_ACTION           = 0x00000400,           // "AllowsTurning"
     SEAT_FLAG_CAN_CONTROL           = 0x00000800,           // Lua_UnitInVehicleControlSeat
     SEAT_FLAG_UNK11                 = 0x00001000,           // "Can Cast Mount Spell"
-    SEAT_FLAG_UNK12                 = 0x00002000,           // "Uncontrolled"
+    SEAT_FLAG_UNCONTROLLED          = 0x00002000,           // Seat uncontrolled for passenger
     SEAT_FLAG_CAN_ATTACK            = 0x00004000,           // Can attack, cast spells and use items from vehicle?
-    SEAT_FLAG_UNK13                 = 0x00008000,           // "ShouldUseVehicleSeatExitAnimationOnForcedExit"
+    SEAT_FLAG_UNATTACKABLE          = 0x00008000,           // "ShouldUseVehicleSeatExitAnimationOnForcedExit"
     SEAT_FLAG_UNK14                 = 0x00010000,
     SEAT_FLAG_UNK15                 = 0x00020000,
     SEAT_FLAG_UNK16                 = 0x00040000,           // "HasVehicleExitAnimForVoluntaryExit"
@@ -626,6 +678,30 @@ enum VehicleSeatFlags
     SEAT_FLAG_CAN_CAST              = 0x20000000,           // Lua_UnitHasVehicleUI
     SEAT_FLAG_UNK25                 = 0x40000000,
     SEAT_FLAG_UNK26                 = 0x80000000,           // "AllowsInteraction"
+};
+
+enum VehicleSeatFlagsB
+{
+    VEHICLE_SEAT_FLAG_B_NONE                     = 0x00000000,
+    VEHICLE_SEAT_FLAG_B_UNK1                     = 0x00000001,
+    VEHICLE_SEAT_FLAG_B_USABLE_FORCED            = 0x00000002,
+    VEHICLE_SEAT_FLAG_B_UNK2                     = 0x00000004,
+    VEHICLE_SEAT_FLAG_B_TARGETS_IN_RAIDUI        = 0x00000008,           // Lua_UnitTargetsVehicleInRaidUI
+    VEHICLE_SEAT_FLAG_B_UNK3                     = 0x00000010,
+    VEHICLE_SEAT_FLAG_B_EJECTABLE                = 0x00000020,           // ejectable
+    VEHICLE_SEAT_FLAG_B_USABLE_FORCED_2          = 0x00000040,
+    VEHICLE_SEAT_FLAG_B_UNK6                     = 0x00000080,
+    VEHICLE_SEAT_FLAG_B_USABLE_FORCED_3          = 0x00000100,
+    VEHICLE_SEAT_FLAG_B_EJECTABLE_FORCED         = 0x00200000,           // seats for forced eject? 27 seats at 3.3.5a
+    VEHICLE_SEAT_FLAG_B_USABLE_FORCED_4          = 0x02000000,
+    VEHICLE_SEAT_FLAG_B_CANSWITCH                = 0x04000000,           // can switch seats
+    VEHICLE_SEAT_FLAG_B_VEHICLE_PLAYERFRAME_UI   = 0x80000000,           // Lua_UnitHasVehiclePlayerFrameUI - actually checked for flagsb &~ 0x80000000
+};
+
+enum MapDifficultyFlags
+{
+    MAP_DIFFICULTY_FLAG_NONE        = 0x00000001,           // Not used in 3.3.5
+    MAP_DIFFICULTY_FLAG_CONDITION   = 0x00000002,           // This map difficulty has condition
 };
 
 #endif

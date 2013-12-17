@@ -301,6 +301,13 @@ void GameObject::Update(uint32 update_diff, uint32 p_time)
                             {
                                 // can be despawned or destroyed
                                 SetLootState(GO_JUST_DEACTIVATED);
+                                // Remove Wild-Summoned GO on timer expire
+                                if (!HasStaticDBSpawnData())
+                                {
+                                    if (Unit* owner = GetOwner())
+                                        owner->RemoveGameObject(this, false);
+                                    Delete();
+                                } 
                                 return;
                             }
 
@@ -433,13 +440,11 @@ void GameObject::Update(uint32 update_diff, uint32 p_time)
                     break;
             }
 
-            if (!HasStaticDBSpawnData())                    // Remove wild summoned after use
+            // Remove wild summoned after use
+            if (!HasStaticDBSpawnData() && (!GetSpellId() || GetGOInfo()->GetDespawnPossibility()))
             {
-                if (GetOwnerGuid())
-                    if (Unit* owner = GetOwner())
-                        owner->RemoveGameObject(this, false);
-
-                SetRespawnTime(0);
+                if (Unit* owner = GetOwner())
+                    owner->RemoveGameObject(this, false); 
                 Delete();
                 return;
             }
@@ -892,7 +897,7 @@ void GameObject::TriggerLinkedGameObject(Unit* target)
     float range = 0.5f;
 
     if (trapSpell)                                          // checked at load already
-        range = GetSpellMaxRange(sSpellRangeStore.LookupEntry(trapSpell->rangeIndex));
+        range = GetSpellMaxRange(sSpellRangeStore.LookupEntry(trapSpell->GetRangeIndex()));
 
     // search nearest linked GO
     GameObject* trapGO = NULL;
@@ -1245,6 +1250,20 @@ void GameObject::Use(Unit* user)
                 case 37639: spellId = 36326; break;
                 case 45367: spellId = 45371; break;
                 case 45370: spellId = 45368; break;
+
+                // custom taxi flights
+                case 32059:             // south
+                    ((Player*)user)->ActivateTaxiPathTo(520,0);
+                    break;
+                case 32068:             // west
+                    ((Player*)user)->ActivateTaxiPathTo(523,0);
+                    break;
+                case 32075:             // north
+                    ((Player*)user)->ActivateTaxiPathTo(522,0);
+                    break;
+                case 32081:             // east
+                    ((Player*)user)->ActivateTaxiPathTo(524,0);
+                    break;
             }
 
             break;
@@ -1470,6 +1489,10 @@ void GameObject::Use(Unit* user)
             }
 
             spellId = info->spellcaster.spellId;
+
+            // dismount players
+            if (user && user->IsMounted())
+                user->RemoveSpellsCausingAura(SPELL_AURA_MOUNTED);
 
             AddUse();
             break;

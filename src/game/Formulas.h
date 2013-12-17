@@ -73,7 +73,10 @@ namespace MaNGOS
             if (pl_level < 50) return 14;
             if (pl_level < 55) return 15;
             if (pl_level < 60) return 16;
-            return 17;
+            if (pl_level < 70) return 17;
+            if (pl_level < 80) return 18;
+            if (pl_level < 85) return 19;
+            return 20;
         }
 
         inline uint32 BaseGain(uint32 pl_level, uint32 mob_level, ContentLevels content)
@@ -85,6 +88,7 @@ namespace MaNGOS
                 case CONTENT_61_70: nBaseExp = 235; break;
                 case CONTENT_71_80: nBaseExp = 580; break;
                 case CONTENT_81_85: nBaseExp = 1878; break;
+                case CONTENT_86_90: nBaseExp = 7194; break;
                 default:
                     sLog.outError("BaseGain: Unsupported content level %u", content);
                     nBaseExp = 45;  break;

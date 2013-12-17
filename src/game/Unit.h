@@ -379,6 +379,7 @@ enum UnitMods
     UNIT_MOD_ECLIPSE,
     UNIT_MOD_HOLY_POWER,
     UNIT_MOD_ALTERNATIVE,
+    UNIT_MOD_CHI,
     UNIT_MOD_ARMOR,                                         // UNIT_MOD_ARMOR..UNIT_MOD_RESISTANCE_ARCANE must be in existing order, it's accessed by index values of SpellSchools enum.
     UNIT_MOD_RESISTANCE_HOLY,
     UNIT_MOD_RESISTANCE_FIRE,
@@ -398,10 +399,10 @@ enum UnitMods
     UNIT_MOD_RESISTANCE_START = UNIT_MOD_ARMOR,
     UNIT_MOD_RESISTANCE_END = UNIT_MOD_RESISTANCE_ARCANE + 1,
     UNIT_MOD_POWER_START = UNIT_MOD_MANA,
-    UNIT_MOD_POWER_END = UNIT_MOD_ALTERNATIVE + 1
+    UNIT_MOD_POWER_END = UNIT_MOD_CHI + 1
 };
 
-static_assert(UNIT_MOD_POWER_END - UNIT_MOD_POWER_START == MAX_POWERS, "Power-related UnitMods are not updated.");
+//static_assert(UNIT_MOD_POWER_END - UNIT_MOD_POWER_START == MAX_POWERS, "Power-related UnitMods are not updated.");
 
 enum BaseModGroup
 {
@@ -498,7 +499,9 @@ enum UnitState
 
     UNIT_STAT_RUNNING_STATE   = UNIT_STAT_CHASE_MOVE | UNIT_STAT_FLEEING_MOVE | UNIT_STAT_RUNNING,
 
-    UNIT_STAT_ALL_STATE       = 0xFFFFFFFF
+    UNIT_STAT_ALL_STATE       = 0xFFFFFFFF,
+    UNIT_STAT_ALL_DYN_STATES  = UNIT_STAT_ALL_STATE & ~(UNIT_STAT_NO_COMBAT_MOVEMENT | UNIT_STAT_RUNNING | UNIT_STAT_WAYPOINT_PAUSED | UNIT_STAT_IGNORE_PATHFINDING),
+
 };
 
 enum UnitMoveType
@@ -515,8 +518,6 @@ enum UnitMoveType
 };
 
 #define MAX_MOVE_TYPE     9
-
-extern float baseMoveSpeed[MAX_MOVE_TYPE];
 
 enum CombatRating
 {
@@ -653,6 +654,7 @@ enum NPCFlags
     UNIT_NPC_FLAG_GUILD_BANKER          = 0x00800000,       // cause client to send 997 opcode
     UNIT_NPC_FLAG_SPELLCLICK            = 0x01000000,       // cause client to send 1015 opcode (spell click), dynamic, set at loading and don't must be set in DB
     UNIT_NPC_FLAG_PLAYER_VEHICLE        = 0x02000000,       // players with mounts that have vehicle data should have it set
+    UNIT_NPC_FLAG_REFORGER              = 0x08000000,       // reforging
 };
 
 // used in most movement packets (send and received), 30 bits in client
@@ -1226,6 +1228,8 @@ enum IgnoreUnitState
 #define REGEN_TIME_HOLY_POWER   10000                       // This determines how often holy power regen is processed
 
 struct SpellProcEventEntry;                                 // used only privately
+
+#define MAX_OBJECT_SLOT 5
 
 class MANGOS_DLL_SPEC Unit : public WorldObject
 {
@@ -1932,6 +1936,10 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
          */
         void Unmount(bool from_aura = false);
 
+        MountCapabilityEntry const* GetMountCapability(uint32 mountType) const;
+
+        void PlayOneShotAnimKit(uint32 id);
+
         VehicleInfo* GetVehicleInfo() { return m_vehicleInfo; }
         bool IsVehicle() const { return m_vehicleInfo != NULL; }
         void SetVehicleId(uint32 entry, uint32 overwriteNpcEntry);
@@ -2406,7 +2414,7 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
         bool CheckAndIncreaseCastCounter();
         void DecreaseCastCounter() { if (m_castCounter) --m_castCounter; }
 
-        ObjectGuid m_ObjectSlotGuid[4];
+        ObjectGuid m_ObjectSlotGuid[MAX_OBJECT_SLOT];
         uint32 m_detectInvisibilityMask;
         uint32 m_invisibilityMask;
 
@@ -2669,7 +2677,8 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
         MotionMaster* GetMotionMaster() { return &i_motionMaster; }
 
         bool IsStopped() const { return !(hasUnitState(UNIT_STAT_MOVING)); }
-        void StopMoving();
+        void StopMoving(bool forceSendStop = false);
+        void InterruptMoving(bool forceSendStop = false);
 
         void SetFeared(bool apply, ObjectGuid casterGuid = ObjectGuid(), uint32 spellID = 0, uint32 time = 0);
         void SetConfused(bool apply, ObjectGuid casterGuid = ObjectGuid(), uint32 spellID = 0);

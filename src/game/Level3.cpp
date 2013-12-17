@@ -448,6 +448,14 @@ bool ChatHandler::HandleReloadConditionsCommand(char* /*args*/)
     return true;
 }
 
+bool ChatHandler::HandleReloadHotfixDataCommand(char* /*args*/)
+{
+    sLog.outString("Re-Loading hotfix data...");
+    sObjectMgr.LoadHotfixData();
+    SendGlobalSysMessage("DB table `hotfix_data` reloaded.");
+    return true;
+}
+
 bool ChatHandler::HandleReloadGossipMenuCommand(char* /*args*/)
 {
     sObjectMgr.LoadGossipMenus();
@@ -3460,7 +3468,7 @@ bool ChatHandler::HandleLookupSpellCommand(char* args)
     uint32 counter = 0;                                     // Counter for figure out that we found smth.
 
     // Search in Spell.dbc
-    for (uint32 id = 0; id < sSpellStore.GetNumRows(); ++id)
+    for (uint32 id = 0; id < sSpellStore.GetNumRows(); id++)
     {
         SpellEntry const* spellInfo = sSpellStore.LookupEntry(id);
         if (spellInfo)
@@ -3490,7 +3498,9 @@ bool ChatHandler::HandleLookupSpellCommand(char* args)
 
             if (loc < MAX_LOCALE)
             {
-                ShowSpellListHelper(target, spellInfo, LocaleConstant(loc));
+                if (target)
+                    ShowSpellListHelper(target, spellInfo, LocaleConstant(loc));
+
                 ++counter;
             }
         }
@@ -5062,7 +5072,7 @@ bool ChatHandler::HandleResetHonorCommand(char* args)
 
     target->SetCurrencyCount(CURRENCY_HONOR_POINTS, 0);
     target->SetUInt32Value(PLAYER_FIELD_KILLS, 0);
-    target->SetUInt32Value(PLAYER_FIELD_LIFETIME_HONORBALE_KILLS, 0);
+    target->SetUInt32Value(PLAYER_FIELD_LIFETIME_HONORABLE_KILLS, 0);
     target->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_EARN_HONORABLE_KILL);
 
     return true;

@@ -236,9 +236,11 @@ void WorldSession::HandleAutoEquipItemOpcode(WorldPacket& recv_data)
 void WorldSession::HandleDestroyItemOpcode(WorldPacket& recv_data)
 {
     // DEBUG_LOG("WORLD: CMSG_DESTROYITEM");
-    uint8 bag, slot, count, data1, data2, data3;
+    uint32 count;
+	int8 bag, slot;
 
-    recv_data >> bag >> slot >> count >> data1 >> data2 >> data3;
+    recv_data >> count;
+	recv_data >> bag >> slot;
     // DEBUG_LOG("STORAGE: receive bag = %u, slot = %u, count = %u", bag, slot, count);
 
     uint16 pos = (bag << 8) | slot;
@@ -568,8 +570,7 @@ void WorldSession::SendListInventory(ObjectGuid vendorguid)
         GetPlayer()->RemoveSpellsCausingAura(SPELL_AURA_FEIGN_DEATH);
 
     // Stop the npc if moving
-    if (!pCreature->IsStopped())
-        pCreature->StopMoving();
+    pCreature->StopMoving();
 
     VendorItemData const* vItems = pCreature->GetVendorItems();
     VendorItemData const* tItems = pCreature->GetVendorTemplateItems();
@@ -1315,3 +1316,244 @@ void WorldSession::HandleItemTextQuery(WorldPacket& recv_data)
     }
     SendPacket(&data);
 }
+
+
+void WorldSession::SendItemDb2Reply(uint32 entry)
+{
+    WorldPacket data(SMSG_DB_REPLY, 44);
+    ItemPrototype const* proto = sObjectMgr.GetItemPrototype(entry);
+    if (!proto)
+    {
+        data << uint32(-1);         // entry
+        data << uint32(DB2_REPLY_ITEM);
+        data << uint32(time(NULL)); // hotfix date
+        data << uint32(0);          // size of next block
+        SendPacket(&data);
+        return;
+    }
+
+    data << uint32(entry);
+    data << uint32(DB2_REPLY_ITEM);
+    data << uint32(sObjectMgr.GetHotfixDate(entry, DB2_REPLY_ITEM));
+
+    ByteBuffer buff;
+    buff << uint32(entry);
+    buff << uint32(proto->Class);
+    buff << uint32(proto->SubClass);
+    buff << int32(proto->Unk0);
+    buff << uint32(proto->Material);
+    buff << uint32(proto->DisplayInfoID);
+    buff << uint32(proto->InventoryType);
+    buff << uint32(proto->Sheath);
+
+    data << uint32(buff.size());
+    data.append(buff);
+
+    SendPacket(&data);
+}
+
+void WorldSession::SendItemSparseDb2Reply(uint32 entry)
+{
+    WorldPacket data(SMSG_DB_REPLY, 526);
+    ItemPrototype const* proto = sObjectMgr.GetItemPrototype(entry);
+    if (!proto)
+    {
+        data << uint32(-1);         // entry
+        data << uint32(DB2_REPLY_SPARSE);
+        data << uint32(time(NULL)); // hotfix date
+        data << uint32(0);          // size of next block
+        SendPacket(&data);
+        return;
+    }
+
+    data << uint32(entry);
+    data << uint32(DB2_REPLY_SPARSE);
+    data << uint32(sObjectMgr.GetHotfixDate(entry, DB2_REPLY_SPARSE));
+
+    ByteBuffer buff;
+    buff << uint32(entry);
+    buff << uint32(proto->Quality);
+    buff << uint32(proto->Flags);
+    buff << uint32(proto->Flags2);
+    buff << float(proto->Unknown);
+    buff << float(proto->Unknown1);
+    buff << uint32(proto->BuyCount);
+    buff << int32(proto->BuyPrice);
+    buff << uint32(proto->SellPrice);
+    buff << uint32(proto->InventoryType);
+    buff << int32(proto->AllowableClass);
+    buff << int32(proto->AllowableRace);
+    buff << uint32(proto->ItemLevel);
+    buff << uint32(proto->RequiredLevel);
+    buff << uint32(proto->RequiredSkill);
+    buff << uint32(proto->RequiredSkillRank);
+    buff << uint32(proto->RequiredSpell);
+    buff << uint32(proto->RequiredHonorRank);
+    buff << uint32(proto->RequiredCityRank);
+    buff << uint32(proto->RequiredReputationFaction);
+    buff << uint32(proto->RequiredReputationRank);
+    buff << int32(proto->MaxCount);
+    buff << int32(proto->Stackable);
+    buff << uint32(proto->ContainerSlots);
+
+    for (uint32 x = 0; x < MAX_ITEM_PROTO_STATS; ++x)
+        buff << uint32(proto->ItemStat[x].ItemStatType);
+
+    for (uint32 x = 0; x < MAX_ITEM_PROTO_STATS; ++x)
+        buff << int32(proto->ItemStat[x].ItemStatValue);
+
+    for (uint32 x = 0; x < MAX_ITEM_PROTO_STATS; ++x)
+        buff << int32(proto->ItemStat[x].ItemStatType2);
+
+    for (uint32 x = 0; x < MAX_ITEM_PROTO_STATS; ++x)
+        buff << int32(proto->ItemStat[x].ItemStatValue2);
+
+    buff << uint32(proto->ScalingStatDistribution);
+    buff << uint32(proto->DamageType);
+    buff << uint32(proto->Delay);
+    buff << float(proto->RangedModRange);
+
+    for (uint32 x = 0; x < MAX_ITEM_PROTO_SPELLS; ++x)
+        buff << int32(proto->Spells[x].SpellId);
+
+    for (uint32 x = 0; x < MAX_ITEM_PROTO_SPELLS; ++x)
+        buff << uint32(proto->Spells[x].SpellTrigger);
+
+    for (uint32 x = 0; x < MAX_ITEM_PROTO_SPELLS; ++x)
+        buff << int32(proto->Spells[x].SpellCharges);
+
+    for (uint32 x = 0; x < MAX_ITEM_PROTO_SPELLS; ++x)
+        buff << int32(proto->Spells[x].SpellCooldown);
+
+    for (uint32 x = 0; x < MAX_ITEM_PROTO_SPELLS; ++x)
+        buff << uint32(proto->Spells[x].SpellCategory);
+
+    for (uint32 x = 0; x < MAX_ITEM_PROTO_SPELLS; ++x)
+        buff << int32(proto->Spells[x].SpellCategoryCooldown);
+
+    buff << uint32(proto->Bonding);
+
+    // item name
+    std::string name = proto->Name1;
+    buff << uint16(name.length());
+    if (name.length())
+        buff << name;
+
+    for (uint32 i = 0; i < 3; ++i) // other 3 names
+        buff << uint16(0);
+
+    std::string desc = proto->Description;
+    buff << uint16(desc.length());
+    if (desc.length())
+        buff << desc;
+
+    buff << uint32(proto->PageText);
+    buff << uint32(proto->LanguageID);
+    buff << uint32(proto->PageMaterial);
+    buff << uint32(proto->StartQuest);
+    buff << uint32(proto->LockID);
+    buff << int32(proto->Material);
+    buff << uint32(proto->Sheath);
+    buff << int32(proto->RandomProperty);
+    buff << int32(proto->RandomSuffix);
+    buff << uint32(proto->ItemSet);
+
+    buff << uint32(proto->Area);
+    buff << uint32(proto->Map);
+    buff << uint32(proto->BagFamily);
+    buff << uint32(proto->TotemCategory);
+
+    for (uint32 x = 0; x < MAX_ITEM_PROTO_SOCKETS; ++x)
+        buff << uint32(proto->Socket[x].Color);
+
+    for (uint32 x = 0; x < MAX_ITEM_PROTO_SOCKETS; ++x)
+        buff << uint32(proto->Socket[x].Content);
+
+    buff << uint32(proto->socketBonus);
+    buff << uint32(proto->GemProperties);
+    buff << float(proto->ArmorDamageModifier);
+    buff << int32(proto->Duration);
+    buff << uint32(proto->ItemLimitCategory);
+    buff << uint32(proto->HolidayId);
+    buff << float(proto->StatScalingFactor);
+    buff << uint32(proto->Unknown400_1);
+    buff << uint32(proto->Unknown400_2);
+
+    data << uint32(buff.size());
+    data.append(buff);
+
+    SendPacket(&data);
+}
+
+void WorldSession::SendReforgeResult(bool success)
+{
+    WorldPacket data(SMSG_REFORGE_RESULT, 1);
+    data.WriteBit(success);
+    SendPacket(&data);
+}
+
+void WorldSession::HandleReforgeItemOpcode(WorldPacket& recvData)
+{
+    uint32 slot, reforgeEntry;
+    ObjectGuid guid;
+    uint32 bag;
+    Player* player = GetPlayer();
+
+    recvData >> reforgeEntry >> slot >> bag;
+    recvData.ReadGuidMask<2, 6, 3, 4, 1, 0, 7, 5>(guid);
+    recvData.ReadGuidBytes<2, 3, 6, 4, 1, 0, 7, 5>(guid);
+
+    if (!player->GetNPCIfCanInteractWith(guid, UNIT_NPC_FLAG_REFORGER))
+    {
+        sLog.outDebug("WORLD: HandleReforgeItemOpcode - Unit (GUID: %s) not found or player can't interact with it.", guid.GetString().c_str());
+        SendReforgeResult(false);
+        return;
+    }
+
+    Item* item = player->GetItemByPos(bag, slot);
+    if (!item)
+    {
+        sLog.outDebug("WORLD: HandleReforgeItemOpcode - Player (Guid: %s) tried to reforge an invalid/non-existant item.", player->GetGuidStr().c_str());
+        SendReforgeResult(false);
+        return;
+    }
+
+    if (!reforgeEntry)
+    {
+        // Reset the item
+        if (item->IsEquipped())
+            player->ApplyReforgeEnchantment(item, false);
+
+        item->ClearEnchantment(REFORGE_ENCHANTMENT_SLOT);
+        SendReforgeResult(true);
+        return;
+    }
+
+    ItemReforgeEntry const* stats = sItemReforgeStore.LookupEntry(reforgeEntry);
+    if (!stats)
+    {
+        sLog.outDebug("WORLD: HandleReforgeItemOpcode - Player (Guid: %s) tried to reforge an item with invalid reforge entry (%u).", player->GetGuidStr().c_str(), reforgeEntry);
+        SendReforgeResult(false);
+        return;
+    }
+
+    if (!item->GetReforgableStat(ItemModType(stats->SourceStat)) || item->GetReforgableStat(ItemModType(stats->FinalStat))) // Cheating, you cant reforge to a stat that the item already has, nor reforge from a stat that the item does not have
+    {
+        SendReforgeResult(false);
+        return;
+    }
+
+    if (player->GetMoney() < uint64(item->GetSpecialPrice()))   // cheating
+    {
+        SendReforgeResult(false);
+        return;
+    }
+
+    player->ModifyMoney(-int64(item->GetSpecialPrice()));
+    item->SetEnchantment(REFORGE_ENCHANTMENT_SLOT, reforgeEntry, 0, 0);
+    SendReforgeResult(true);
+
+    if (item->IsEquipped())
+        player->ApplyReforgeEnchantment(item, true);
+}
+

@@ -261,20 +261,7 @@ World::AddSession_(WorldSession* s)
         return;
     }
 
-    WorldPacket packet(SMSG_AUTH_RESPONSE, 17);
-
-    packet.WriteBit(false);                                 // has queue
-    packet.WriteBit(true);                                  // has account info
-
-    packet << uint32(0);                                    // Unknown - 4.3.2
-    packet << uint8(s->Expansion());                        // 0 - normal, 1 - TBC, 2 - WotLK, 3 - Cata, 4 - MOP. must be set in database manually for each account
-    packet << uint32(0);                                    // BillingTimeRemaining
-    packet << uint8(s->Expansion());                        // 0 - normal, 1 - TBC, 2 - WotLK, 3 - Cata, 4 - MOP. Must be set in database manually for each account.
-    packet << uint32(0);                                    // BillingTimeRested
-    packet << uint8(0);                                     // BillingPlanFlags
-    packet << uint8(AUTH_OK);
-
-    s->SendPacket(&packet);
+    s->SendAuthResponse(AUTH_OK, false);
 
     s->SendAddonsInfo();
 
@@ -319,22 +306,7 @@ void World::AddQueuedSession(WorldSession* sess)
     m_QueuedSessions.push_back (sess);
 
     // The 1st SMSG_AUTH_RESPONSE needs to contain other info too.
-    WorldPacket packet (SMSG_AUTH_RESPONSE, 21);
-
-    packet.WriteBit(true);                                  // has queue
-    packet.WriteBit(false);                                 // unk queue-related
-    packet.WriteBit(true);                                  // has account data
-
-    packet << uint32(0);                                    // Unknown - 4.3.2
-    packet << uint8(sess->Expansion());                     // 0 - normal, 1 - TBC, 2 - WotLK, 3 - CT. must be set in database manually for each account
-    packet << uint32(0);                                    // BillingTimeRemaining
-    packet << uint8(sess->Expansion());                     // 0 - normal, 1 - TBC, 2 - WotLK, 3 - CT. Must be set in database manually for each account.
-    packet << uint32(0);                                    // BillingTimeRested
-    packet << uint8(0);                                     // BillingPlanFlags
-    packet << uint8(AUTH_WAIT_QUEUE);
-    packet << uint32(GetQueuedSessionPos(sess));            // position in queue
-
-    sess->SendPacket(&packet);
+    sess->SendAuthResponse(AUTH_WAIT_QUEUE, true, GetQueuedSessionPos(sess));
 }
 
 bool World::RemoveQueuedSession(WorldSession* sess)
@@ -617,7 +589,7 @@ void World::LoadConfigSettings(bool reload)
     setConfigMinMax(CONFIG_UINT32_START_PLAYER_LEVEL, "StartPlayerLevel", 1, 1, getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL));
     setConfigMinMax(CONFIG_UINT32_START_HEROIC_PLAYER_LEVEL, "StartHeroicPlayerLevel", 55, 1, getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL));
 
-    setConfigMinMax(CONFIG_UINT32_START_PLAYER_MONEY, "StartPlayerMoney", 0, 0, MAX_MONEY_AMOUNT);
+    setConfigMinMax(CONFIG_UINT64_START_PLAYER_MONEY, "StartPlayerMoney", 0, 0, MAX_MONEY_AMOUNT);
 
     setConfigMinMax(CONFIG_UINT32_CURRENCY_RESET_TIME_HOUR, "Currency.ResetHour", 6, 0, 23);
     setConfigMinMax(CONFIG_UINT32_CURRENCY_RESET_TIME_WEEK_DAY, "Currency.ResetWeekDay", 3, 0, 6);
@@ -718,7 +690,6 @@ void World::LoadConfigSettings(bool reload)
 
     setConfig(CONFIG_UINT32_WORLD_BOSS_LEVEL_DIFF, "WorldBossLevelDiff", 3);
 
-    // note: disable value (-1) will assigned as 0xFFFFFFF, to prevent overflow at calculations limit it to max possible player level MAX_LEVEL(100)
     setConfigMinMax(CONFIG_INT32_QUEST_LOW_LEVEL_HIDE_DIFF, "Quests.LowLevelHideDiff", 4, -1, MAX_LEVEL);
     setConfigMinMax(CONFIG_INT32_QUEST_HIGH_LEVEL_HIDE_DIFF, "Quests.HighLevelHideDiff", 7, -1, MAX_LEVEL);
 
@@ -957,10 +928,12 @@ void World::SetInitialWorldSettings()
             !MapManager::ExistMapAndVMap(1, -2917.58f, -257.98f) ||                 // Tauren
             (m_configUint32Values[CONFIG_UINT32_EXPANSION] >= EXPANSION_TBC &&
               (!MapManager::ExistMapAndVMap(530, 10349.6f, -6357.29f) ||            // BloodElf
-              !MapManager::ExistMapAndVMap(530, -3961.64f, -13931.2f))) ||          // Draenei
-            (m_configUint32Values[CONFIG_UINT32_EXPANSION] >= EXPANSION_WOTLK &&
-              !MapManager::ExistMapAndVMap(609, 2355.84f, -5664.77f)))              // Death Knight
-    {
+              !MapManager::ExistMapAndVMap(530, -3961.64f, -13931.2f)) ||           // Draenei
+        	(m_configUint32Values[CONFIG_UINT32_EXPANSION] >= EXPANSION_WOTLK &&
+              !MapManager::ExistMapAndVMap(609, 2355.84f, -5664.77f))) ||           // Death Knight
+            (m_configUint32Values[CONFIG_UINT32_EXPANSION] >= EXPANSION_MOP &&
+              !MapManager::ExistMapAndVMap(870, 3001.38f, -542.47f)))                // Pandaren
+	{
         sLog.outError("Correct *.map files not found in path '%smaps' or *.vmtree/*.vmtile files in '%svmaps'. Please place *.map and vmap files in appropriate directories or correct the DataDir value in the mangosd.conf file.", m_dataPath.c_str(), m_dataPath.c_str());
         Log::WaitBeforeContinueIfNeed();
         exit(1);
@@ -992,9 +965,6 @@ void World::SetInitialWorldSettings()
     LoadDB2Stores(m_dataPath);
     DetectDBCLang();
     sObjectMgr.SetDBCLocaleIndex(GetDefaultDbcLocale());    // Get once for all the locale index of DBC language (console/broadcasts)
-
-    sLog.outString("Loading SpellTemplate...");
-    sObjectMgr.LoadSpellTemplate();
 
     sLog.outString("Loading Script Names...");
     sScriptMgr.LoadScriptNames();
@@ -1330,6 +1300,9 @@ void World::SetInitialWorldSettings()
 
     sLog.outString("Loading GM tickets...");
     sTicketMgr.LoadGMTickets();
+
+    sLog.outString("Loading hotfix data...");
+    sObjectMgr.LoadHotfixData();
 
     ///- Handle outdated emails (delete/return)
     sLog.outString("Returning old mails...");
@@ -1686,12 +1659,12 @@ namespace MaNGOS
                     data->Initialize(SMSG_MESSAGECHAT, 100);// guess size
                     *data << uint8(CHAT_MSG_SYSTEM);
                     *data << uint32(LANG_UNIVERSAL);
-                    *data << uint64(0);
+                    *data << ObjectGuid();
                     *data << uint32(0);                     // can be chat msg group or something
-                    *data << uint64(0);
+                    *data << ObjectGuid();
                     *data << uint32(lineLength);
                     *data << line;
-                    *data << uint8(0);
+                    *data << uint16(0);
 
                     data_list.push_back(data);
                 }
@@ -2320,6 +2293,21 @@ void World::LoadDBVersion()
         m_CreatureEventAIVersion = "Unknown creature EventAI.";
 }
 
+void World::setConfig(eConfigUInt64Values index, char const* fieldname, uint64 defvalue)
+{
+    setConfig(index, sConfig.GetInt64Default(fieldname, defvalue));
+    if (int64(getConfig(index)) < 0)
+    {
+        sLog.outError("%s (%i) can't be negative. Using %u instead.", fieldname, int64(getConfig(index)), defvalue);
+        setConfig(index, defvalue);
+    }
+}
+
+void World::setConfig(eConfigInt64Values index, char const* fieldname, int64 defvalue)
+{
+    setConfig(index, sConfig.GetIntDefault(fieldname, defvalue));
+}
+
 void World::setConfig(eConfigUInt32Values index, char const* fieldname, uint32 defvalue)
 {
     setConfig(index, sConfig.GetIntDefault(fieldname, defvalue));
@@ -2355,6 +2343,26 @@ void World::setConfigPos(eConfigFloatValues index, char const* fieldname, float 
     }
 }
 
+void World::setConfigMin(eConfigUInt64Values index, char const* fieldname, uint64 defvalue, uint64 minvalue)
+{
+    setConfig(index, fieldname, defvalue);
+    if (getConfig(index) < minvalue)
+    {
+        sLog.outError("%s (%u) must be >= %u. Using %u instead.", fieldname, getConfig(index), minvalue, minvalue);
+        setConfig(index, minvalue);
+    }
+}
+
+void World::setConfigMin(eConfigInt64Values index, char const* fieldname, int64 defvalue, int64 minvalue)
+{
+    setConfig(index, fieldname, defvalue);
+    if (getConfig(index) < minvalue)
+    {
+        sLog.outError("%s (%i) must be >= %i. Using %i instead.", fieldname, getConfig(index), minvalue, minvalue);
+        setConfig(index, minvalue);
+    }
+}
+
 void World::setConfigMin(eConfigUInt32Values index, char const* fieldname, uint32 defvalue, uint32 minvalue)
 {
     setConfig(index, fieldname, defvalue);
@@ -2382,6 +2390,36 @@ void World::setConfigMin(eConfigFloatValues index, char const* fieldname, float 
     {
         sLog.outError("%s (%f) must be >= %f. Using %f instead.", fieldname, getConfig(index), minvalue, minvalue);
         setConfig(index, minvalue);
+    }
+}
+
+void World::setConfigMinMax(eConfigUInt64Values index, char const* fieldname, uint64 defvalue, uint64 minvalue, uint64 maxvalue)
+{
+    setConfig(index, fieldname, defvalue);
+    if (getConfig(index) < minvalue)
+    {
+        sLog.outError("%s (%u) must be in range %u...%u. Using %u instead.", fieldname, getConfig(index), minvalue, maxvalue, minvalue);
+        setConfig(index, minvalue);
+    }
+    else if (getConfig(index) > maxvalue)
+    {
+        sLog.outError("%s (%u) must be in range %u...%u. Using %u instead.", fieldname, getConfig(index), minvalue, maxvalue, maxvalue);
+        setConfig(index, maxvalue);
+    }
+}
+
+void World::setConfigMinMax(eConfigInt64Values index, char const* fieldname, int64 defvalue, int64 minvalue, int64 maxvalue)
+{
+    setConfig(index, fieldname, defvalue);
+    if (getConfig(index) < minvalue)
+    {
+        sLog.outError("%s (%i) must be in range %i...%i. Using %i instead.", fieldname, getConfig(index), minvalue, maxvalue, minvalue);
+        setConfig(index, minvalue);
+    }
+    else if (getConfig(index) > maxvalue)
+    {
+        sLog.outError("%s (%i) must be in range %i...%i. Using %i instead.", fieldname, getConfig(index), minvalue, maxvalue, maxvalue);
+        setConfig(index, maxvalue);
     }
 }
 

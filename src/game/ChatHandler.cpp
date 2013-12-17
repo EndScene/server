@@ -76,7 +76,7 @@ void WorldSession::HandleMessagechatOpcode(WorldPacket& recv_data)
         case CMSG_MESSAGECHAT_EMOTE:        type = CHAT_MSG_EMOTE;          break;
         case CMSG_MESSAGECHAT_PARTY:        type = CHAT_MSG_PARTY;          break;
         case CMSG_MESSAGECHAT_RAID:         type = CHAT_MSG_RAID;           break;
-        case CMSG_MESSAGECHAT_BATTLEGROUND: type = CHAT_MSG_BATTLEGROUND;   break;
+        case CMSG_MESSAGECHAT_INSTANCE: type = CHAT_MSG_BATTLEGROUND;   break;
         case CMSG_MESSAGECHAT_RAID_WARNING: type = CHAT_MSG_RAID_WARNING;   break;
         default:
             sLog.outError("HandleMessagechatOpcode : Unknown chat opcode (0x%X)", recv_data.GetOpcode());
@@ -210,11 +210,10 @@ void WorldSession::HandleMessagechatOpcode(WorldPacket& recv_data)
 
         case CHAT_MSG_WHISPER:
         {
-            std::string to, msg;
-            uint32 toLength = recv_data.ReadBits(10);
             uint32 msgLength = recv_data.ReadBits(9);
-            to = recv_data.ReadString(toLength);
-            msg = recv_data.ReadString(msgLength);
+            uint32 toLength = recv_data.ReadBits(10);
+            std::string msg = recv_data.ReadString(msgLength);
+            std::string to = recv_data.ReadString(toLength);
 
             if (!processChatmessageFurtherAfterSecurityChecks(msg, lang))
                 return;
@@ -247,8 +246,8 @@ void WorldSession::HandleMessagechatOpcode(WorldPacket& recv_data)
             }
 
             GetPlayer()->Whisper(msg, lang, player->GetObjectGuid());
-        } break;
-
+            break;
+        }
         case CHAT_MSG_PARTY:
         case CHAT_MSG_PARTY_LEADER:
         {
@@ -537,7 +536,7 @@ void WorldSession::HandleAddonMessagechatOpcode(WorldPacket& recv_data)
 
     switch (recv_data.GetOpcode())
     {
-        case CMSG_MESSAGECHAT_ADDON_BATTLEGROUND:   type = CHAT_MSG_BATTLEGROUND;   break;
+        case CMSG_MESSAGECHAT_ADDON_INSTANCE:   type = CHAT_MSG_BATTLEGROUND;   break;
         case CMSG_MESSAGECHAT_ADDON_GUILD:          type = CHAT_MSG_GUILD;          break;
         case CMSG_MESSAGECHAT_ADDON_OFFICER:        type = CHAT_MSG_OFFICER;        break;
         case CMSG_MESSAGECHAT_ADDON_PARTY:          type = CHAT_MSG_PARTY;          break;
