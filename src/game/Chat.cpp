@@ -227,6 +227,7 @@ ChatCommand* ChatHandler::getCommandTable()
         { "equiperror",     SEC_ADMINISTRATOR,  false, &ChatHandler::HandleDebugSendEquipErrorCommand,      "", NULL },
         { "largepacket",    SEC_ADMINISTRATOR,  false, &ChatHandler::HandleDebugSendLargePacketCommand,     "", NULL },
         { "opcode",         SEC_ADMINISTRATOR,  false, &ChatHandler::HandleDebugSendOpcodeCommand,          "", NULL },
+        { "phase",          SEC_ADMINISTRATOR,  false, &ChatHandler::HandleDebugPhaseCommand,               "", NULL },        
         { "poi",            SEC_ADMINISTRATOR,  false, &ChatHandler::HandleDebugSendPoiCommand,             "", NULL },
         { "qpartymsg",      SEC_ADMINISTRATOR,  false, &ChatHandler::HandleDebugSendQuestPartyMsgCommand,   "", NULL },
         { "qinvalidmsg",    SEC_ADMINISTRATOR,  false, &ChatHandler::HandleDebugSendQuestInvalidMsgCommand, "", NULL },
@@ -575,6 +576,7 @@ ChatCommand* ChatHandler::getCommandTable()
         { "npc_trainer",                 SEC_ADMINISTRATOR, true,  &ChatHandler::HandleReloadNpcTrainerCommand,              "", NULL },
         { "npc_vendor",                  SEC_ADMINISTRATOR, true,  &ChatHandler::HandleReloadNpcVendorCommand,               "", NULL },
         { "page_text",                   SEC_ADMINISTRATOR, true,  &ChatHandler::HandleReloadPageTextsCommand,               "", NULL },
+        { "phase_definitions",           SEC_ADMINISTRATOR, true,  &ChatHandler::HandleReloadPhaseDefinitionsCommand,        "", NULL },
         { "pickpocketing_loot_template", SEC_ADMINISTRATOR, true,  &ChatHandler::HandleReloadLootTemplatesPickpocketingCommand, "", NULL},
         { "points_of_interest",          SEC_ADMINISTRATOR, true,  &ChatHandler::HandleReloadPointsOfInterestCommand,        "", NULL },
         { "prospecting_loot_template",   SEC_ADMINISTRATOR, true,  &ChatHandler::HandleReloadLootTemplatesProspectingCommand, "", NULL },
@@ -1333,12 +1335,12 @@ bool ChatHandler::ParseCommands(const char* text)
     MANGOS_ASSERT(text);
     MANGOS_ASSERT(*text);
 
-    // if(m_session->GetSecurity() == SEC_PLAYER)
-    //    return false;
-
     /// chat case (.command or !command format)
     if (m_session)
     {
+        if (m_session->GetSecurity() == SEC_PLAYER && !sWorld.getConfig(CONFIG_BOOL_PLAYER_COMMANDS))
+            return false;
+
         if (text[0] != '!' && text[0] != '.')
             return false;
 
@@ -2099,6 +2101,8 @@ void ChatHandler::FillMessageData(WorldPacket* data, WorldSession* session, uint
     else
         *data << uint32(LANG_UNIVERSAL);
 
+    ObjectGuid groupGuid;
+
     switch (type)
     {
         case CHAT_MSG_SAY:
@@ -2115,8 +2119,11 @@ void ChatHandler::FillMessageData(WorldPacket* data, WorldSession* session, uint
         case CHAT_MSG_BG_SYSTEM_NEUTRAL:
         case CHAT_MSG_BG_SYSTEM_ALLIANCE:
         case CHAT_MSG_BG_SYSTEM_HORDE:
-        case CHAT_MSG_BATTLEGROUND:
-        case CHAT_MSG_BATTLEGROUND_LEADER:
+        //case CHAT_MSG_BATTLEGROUND:
+        //case CHAT_MSG_BATTLEGROUND_LEADER:
+        case CHAT_MSG_INSTANCE_CHAT:
+        case CHAT_MSG_INSTANCE_CHAT_LEADER:
+            groupGuid = targetGuid;
             targetGuid = session ? session->GetPlayer()->GetObjectGuid() : ObjectGuid();
             break;
         case CHAT_MSG_MONSTER_SAY:
@@ -2127,6 +2134,7 @@ void ChatHandler::FillMessageData(WorldPacket* data, WorldSession* session, uint
         case CHAT_MSG_RAID_BOSS_WHISPER:
         case CHAT_MSG_RAID_BOSS_EMOTE:
         case CHAT_MSG_BATTLENET:
+        case CHAT_MSG_QUEST_BOSS_EMOTE:
         {
             *data << ObjectGuid(speaker->GetObjectGuid());
             *data << uint32(0);                             // 2.1.0
@@ -2143,7 +2151,7 @@ void ChatHandler::FillMessageData(WorldPacket* data, WorldSession* session, uint
             *data << message;
             *data << uint8(0);
 
-            if (type == CHAT_MSG_RAID_BOSS_WHISPER || type == CHAT_MSG_RAID_BOSS_EMOTE)
+            if (type == CHAT_MSG_QUEST_BOSS_EMOTE || type == CHAT_MSG_RAID_BOSS_WHISPER || type == CHAT_MSG_RAID_BOSS_EMOTE)
             {
                 *data << float(0.0f);                       // Added in 4.2.0, unk
                 *data << uint8(0);                          // Added in 4.2.0, unk
@@ -2171,13 +2179,18 @@ void ChatHandler::FillMessageData(WorldPacket* data, WorldSession* session, uint
         *data << addonPrefix;
     }
     else
-    *data << ObjectGuid(targetGuid);
+        *data << ObjectGuid(targetGuid);
+
+    if (type == CHAT_MSG_PARTY || type == CHAT_MSG_PARTY_LEADER || type == CHAT_MSG_RAID ||
+        type == CHAT_MSG_RAID_LEADER || type == CHAT_MSG_RAID_WARNING)
+        *data << groupGuid;
+
     *data << uint32(messageLength);
     *data << message;
-    if (session != 0 && type != CHAT_MSG_WHISPER_INFORM && type != CHAT_MSG_DND && type != CHAT_MSG_AFK)
-        *data << uint8(session->GetPlayer()->GetChatTag());
+    if (session && type != CHAT_MSG_WHISPER_INFORM && type != CHAT_MSG_DND && type != CHAT_MSG_AFK)
+        *data << uint16(session->GetPlayer()->GetChatTag());
     else
-        *data << uint8(0);
+        *data << uint16(0);
 }
 
 Player* ChatHandler::getSelectedPlayer()
